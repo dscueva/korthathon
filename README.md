@@ -10,3 +10,10 @@ This project aims to simplify the payment experience using GHO tokens, an ERC-20
 ## Usage
 Use the SDK functions to integrate GHO payment functionalities into your application.
 Examples and documentation are provided for standard operations like token transfer, credit delegation, and multi-signature transactions.
+
+## Next Steps
+* Choose language for SDK (Rust v Go)
+* Write smart contracts (multi-sig support)
+* Develop functionality in the SDK to provide a standardized way of implementing multi-sig functionality. An SDK dedicated to multisig can incorporate best practices and security measures, making it safer to execute transactions, especially those involving significant value or critical operations.
+
+
