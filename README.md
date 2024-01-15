@@ -1,4 +1,4 @@
-# ETHGlobal Hackathon
+# This is for the hackathon, we will update this readme upon submission to be more professional
 # GHO Token Payment Simplifaction Toolkit
 ## Project Overview
 This project aims to simplify the payment experience using GHO tokens, an ERC-20 token with signature-based approvals. The toolkit leverages on-chain facilitators such as the Aave Ethereum Market and Flashmint facilitators to enhance liquidity access. The goal is to provide an easy-to-use application or SDK that abstracts complex processes, making GHO more accessible and user-friendly.
