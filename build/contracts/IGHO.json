@@ -26,7 +26,7 @@
       "type": "function"
     }
   ],
-  "metadata": "{\"compiler\":{\"version\":\"0.8.21+commit.d9974bed\"},\"language\":\"Solidity\",\"output\":{\"abi\":[{\"inputs\":[{\"internalType\":\"address\",\"name\":\"to\",\"type\":\"address\"},{\"internalType\":\"uint256\",\"name\":\"amount\",\"type\":\"uint256\"}],\"name\":\"transfer\",\"outputs\":[{\"internalType\":\"bool\",\"name\":\"\",\"type\":\"bool\"}],\"stateMutability\":\"nonpayable\",\"type\":\"function\"}],\"devdoc\":{\"kind\":\"dev\",\"methods\":{},\"version\":1},\"userdoc\":{\"kind\":\"user\",\"methods\":{},\"version\":1}},\"settings\":{\"compilationTarget\":{\"project:/contracts/ghomultisig.sol\":\"IGHO\"},\"evmVersion\":\"shanghai\",\"libraries\":{},\"metadata\":{\"bytecodeHash\":\"ipfs\"},\"optimizer\":{\"enabled\":false,\"runs\":200},\"remappings\":[]},\"sources\":{\"project:/contracts/ghomultisig.sol\":{\"keccak256\":\"0x199aae8a616f1babc5bbf5e46383ccde1314a6d7a7e19ff9959c3292d436951d\",\"license\":\"MIT\",\"urls\":[\"bzz-raw://52bc27883979091e270c00b4e18359c3c3a07bd46fff0f69d42b2bf4ba5cbfc5\",\"dweb:/ipfs/QmeKw5YiWD67Lsw27s8cknJhukRJ2HCYaio77pymPBrdWx\"]}},\"version\":1}",
+  "metadata": "{\"compiler\":{\"version\":\"0.8.21+commit.d9974bed\"},\"language\":\"Solidity\",\"output\":{\"abi\":[{\"inputs\":[{\"internalType\":\"address\",\"name\":\"to\",\"type\":\"address\"},{\"internalType\":\"uint256\",\"name\":\"amount\",\"type\":\"uint256\"}],\"name\":\"transfer\",\"outputs\":[{\"internalType\":\"bool\",\"name\":\"\",\"type\":\"bool\"}],\"stateMutability\":\"nonpayable\",\"type\":\"function\"}],\"devdoc\":{\"kind\":\"dev\",\"methods\":{},\"version\":1},\"userdoc\":{\"kind\":\"user\",\"methods\":{},\"version\":1}},\"settings\":{\"compilationTarget\":{\"project:/contracts/ghomultisig.sol\":\"IGHO\"},\"evmVersion\":\"shanghai\",\"libraries\":{},\"metadata\":{\"bytecodeHash\":\"ipfs\"},\"optimizer\":{\"enabled\":true,\"runs\":200},\"remappings\":[]},\"sources\":{\"project:/contracts/ghomultisig.sol\":{\"keccak256\":\"0x199aae8a616f1babc5bbf5e46383ccde1314a6d7a7e19ff9959c3292d436951d\",\"license\":\"MIT\",\"urls\":[\"bzz-raw://52bc27883979091e270c00b4e18359c3c3a07bd46fff0f69d42b2bf4ba5cbfc5\",\"dweb:/ipfs/QmeKw5YiWD67Lsw27s8cknJhukRJ2HCYaio77pymPBrdWx\"]}},\"version\":1}",
   "bytecode": "0x",
   "deployedBytecode": "0x",
   "immutableReferences": {},
@@ -3965,7 +3965,7 @@
   },
   "networks": {},
   "schemaVersion": "3.4.16",
-  "updatedAt": "2024-01-16T14:06:58.781Z",
+  "updatedAt": "2024-01-16T19:10:48.962Z",
   "devdoc": {
     "kind": "dev",
     "methods": {},

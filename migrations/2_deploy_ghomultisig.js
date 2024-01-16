@@ -2,7 +2,7 @@ const GhoMultisig = artifacts.require("ghomultisig");
 
 module.exports = function (deployer, network, accounts) {
     const ghoTokenAddress = '0xc4bF5CbDaBE595361438F8c6a187bDc330539c60'; // GHO Token Address
-    const requiredConfirmations = 2; // Or any number you prefer
+    const requiredConfirmations = 0; // Or any number you prefer
 
     // Example signatory addresses - replace with actual signatory addresses
     const signatories = [
