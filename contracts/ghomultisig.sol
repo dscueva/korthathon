@@ -124,16 +124,17 @@ contract ghomultisig {
             signatories.push(addedSig.sigAddress);
             requiredConfirmations += 1;
 
+            emit IncreaseMinimumConfirmations(msg.sender, requiredConfirmations);
             emit AddSignatory(addedSig.sigAddress);
         }
     }
 
-    function increaseMinimumConfirmations(uint _increase) public onlySignatory {
-        require((requiredConfirmations + _increase) <= signatories.length, "Required Signatures exceeds total Signatories");
-        requiredConfirmations = requiredConfirmations + _increase;
+    // function increaseMinimumConfirmations(uint _increase) public onlySignatory {
+    //     require((requiredConfirmations + _increase) <= signatories.length, "Required Signatures exceeds total Signatories");
+    //     requiredConfirmations = requiredConfirmations + _increase;
 
-        emit IncreaseMinimumConfirmations(msg.sender, requiredConfirmations);
-    }
+    //     emit IncreaseMinimumConfirmations(msg.sender, requiredConfirmations);
+    // }
 
     // Events
     event SubmitTransaction(address indexed owner, uint indexed txIndex, address indexed to, uint amount);
