@@ -6,13 +6,10 @@ const sepoliaRPC = process.env.SEPOLIA_RPC_URL;
 module.exports = {
   networks: {
     sepolia: {
-      provider: () => new HDWalletProvider(mnemonic, sepoliaRPC),
+      provider: () => new HDWalletProvider(mnemonic, "https://eth-sepolia.g.alchemy.com/v2/kg1W_wKisQhhOrUVa6878Mv51A749CiJ"),
       network_id: 11155111,
-      gas: 25000000, // Increased gas limit
-      gasPrice: 20000000000, // Adjust gas price if necessary
       confirmations: 0,
       timeoutBlocks: 200,
-      skipDryRun: true
     }
   },
   mocha: {
