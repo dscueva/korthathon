@@ -203,7 +203,7 @@ contract ghomultisig {
         }
     }
 
-    //Add function to allow a signatory to remove themselves from the wallet, and decrease required confirmations by 1. Also removes their signature from any staged transactions that were not yet executed
+    //Add function to allow a signatory to remove themselves from the wallet, and decrease required confirmations by 1. Also removes their signature from any staged transactions and any staged signatories that were not yet executed
     function removeSignatory() public onlySignatory {
         require(signatories.length > 1, "Cannot remove last signatory");
         isSignatory[msg.sender] = false;
@@ -221,6 +221,12 @@ contract ghomultisig {
             if(txConfirmations[i][msg.sender]){
                 transactions[i].confirmationsCount -= 1;
                 txConfirmations[i][msg.sender] = false;
+            }
+        }
+        for(uint i = 0; i < newSignatories.length; i++){
+            if(sigConfirmations[i][msg.sender]){
+                newSignatories[i].confirmationsCount -= 1;
+                sigConfirmations[i][msg.sender] = false;
             }
         }
     }
