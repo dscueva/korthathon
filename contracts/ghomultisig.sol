@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.21;
 
-interface IGHO {
-    function transfer(address to, uint256 amount) external returns (bool);
-}
-
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+// GHO token addr: 0xc4bF5CbDaBE595361438F8c6a187bDc330539c60
+// Nate PubKey 0xc977Fdb84F4ed2425f6afA5f47bd686291615451
 contract ghomultisig {
-    IGHO public ghoToken;
+    IERC20 public ghoToken;
+    uint256 public balance;
     address[] public signatories;
     mapping(address => bool) public isSignatory;
     uint public requiredConfirmations;
@@ -36,7 +36,7 @@ contract ghomultisig {
     }
 
     constructor(address _ghoTokenAddress, address[] memory _signatories, uint _requiredConfirmations) {
-        ghoToken = IGHO(_ghoTokenAddress);
+        ghoToken = IERC20(_ghoTokenAddress);
         require(_signatories.length >= _requiredConfirmations, "Not enough signatories");
         for (uint i = 0; i < _signatories.length; i++) {
             address signatory = _signatories[i];
@@ -47,6 +47,10 @@ contract ghomultisig {
             signatories.push(signatory);
         }
         requiredConfirmations = _requiredConfirmations;
+    }
+
+    function balanceGHO() public onlySignatory {
+        balance = ghoToken.balanceOf(address(this));
     }
 
     function submitTransaction(address _to, uint256 _amount) public onlySignatory {
