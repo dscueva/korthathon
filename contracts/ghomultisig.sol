@@ -49,8 +49,8 @@ contract ghomultisig {
         requiredConfirmations = _requiredConfirmations;
     }
 
-    function balanceGHO() public onlySignatory {
-        balance = ghoToken.balanceOf(address(this));
+    function getTokenBalance(address _address) public view returns (uint256) {
+        return ghoToken.balanceOf(_address);
     }
 
     function submitTransaction(address _to, uint256 _amount) public onlySignatory {
