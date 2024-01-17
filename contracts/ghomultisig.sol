@@ -2,42 +2,47 @@
 pragma solidity ^0.8.21;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-// GHO token addr: 0xc4bF5CbDaBE595361438F8c6a187bDc330539c60
-// Nate PubKey 0xc977Fdb84F4ed2425f6afA5f47bd686291615451
+import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Permit.sol";
+
+// Nate PubKey ["0xc977Fdb84F4ed2425f6afA5f47bd686291615451"]
 contract ghomultisig {
-    IERC20 public ghoToken;
-    uint256 public balance;
+    
+    IERC20 ghoToken;
     address[] public signatories;
-    mapping(address => bool) public isSignatory;
+    mapping(address => bool) isSignatory;
     uint public requiredConfirmations;
+
+    
 
     struct Transaction {
         address to;
         uint256 amount;
         bool executed;
-        mapping(address => bool) confirmations;
         uint confirmationsCount;
     }
 
     struct NewSignatory {
         address sigAddress;
         bool confirmed;
-        mapping(address => bool) confirmations;
         uint confirmationsCount;
     }
 
-    Transaction[] public transactions;
+    Transaction[] internal transactions;
+    mapping(uint => mapping(address => bool)) txConfirmations;
     
-    NewSignatory[] public newSignatories;
+    NewSignatory[] internal newSignatories;
+    mapping(uint => mapping(address => bool)) sigConfirmations;
+
 
     modifier onlySignatory() {
         require(isSignatory[msg.sender], "Not a signatory");
         _;
     }
 
-    constructor(address _ghoTokenAddress, address[] memory _signatories, uint _requiredConfirmations) {
-        ghoToken = IERC20(_ghoTokenAddress);
+    constructor(address[] memory _signatories, uint _requiredConfirmations) {
+        ghoToken = IERC20(address(0xc4bF5CbDaBE595361438F8c6a187bDc330539c60));
         require(_signatories.length >= _requiredConfirmations, "Not enough signatories");
+        require(_requiredConfirmations > 0, "Must have at least 1 required confirmation");
         for (uint i = 0; i < _signatories.length; i++) {
             address signatory = _signatories[i];
             require(signatory != address(0), "Invalid signatory");
@@ -49,11 +54,20 @@ contract ghomultisig {
         requiredConfirmations = _requiredConfirmations;
     }
 
-    function getTokenBalance(address _address) public view returns (uint256) {
-        return ghoToken.balanceOf(_address);
+    function viewStagedTransactions() external view onlySignatory returns(Transaction[] memory){
+        return transactions;
+    }
+
+    function viewStagedSignatories() external view onlySignatory returns(NewSignatory[] memory){
+        return newSignatories;
+    }
+
+    function balanceGHO() public view returns (uint256 _balance) {
+        _balance = ghoToken.balanceOf(address(this));
     }
 
     function submitTransaction(address _to, uint256 _amount) public onlySignatory {
+        require(balanceGHO() >= _amount, "Insufficient amount of Tokens");
         uint txIndex = transactions.length;
         transactions.push();
         Transaction storage newTx = transactions[txIndex];
@@ -63,20 +77,10 @@ contract ghomultisig {
         emit SubmitTransaction(msg.sender, txIndex, _to, _amount);
     }
 
-    function confirmTransaction(uint _txIndex) public onlySignatory {
-        Transaction storage transaction = transactions[_txIndex];
-        require(!transaction.executed, "Transaction already executed");
-        require(!transaction.confirmations[msg.sender], "Transaction already confirmed");
-
-        transaction.confirmations[msg.sender] = true;
-        transaction.confirmationsCount += 1;
-
-        emit ConfirmTransaction(msg.sender, _txIndex);
-    }
-
-    function executeTransaction(uint _txIndex) public onlySignatory {
+    function executeTransaction(uint _txIndex) internal {
         require(_txIndex < transactions.length);
         Transaction storage transaction = transactions[_txIndex];
+        require(balanceGHO() >= transaction.amount, "Insufficient amount of tokens in wallet");
         require(!transaction.executed, "Transaction already executed");
         require(transaction.confirmationsCount >= requiredConfirmations, "Insufficient confirmations");
 
@@ -102,7 +106,7 @@ contract ghomultisig {
             newSignatories.push();
             NewSignatory storage newSig = newSignatories[sigIndex];
             newSig.sigAddress = _addedSignatory;
-            newSig.confirmations[msg.sender] = true;
+            sigConfirmations[sigIndex][msg.sender] = true;
             newSig.confirmationsCount = 1;
             newSig.confirmed = false;
 
@@ -110,42 +114,105 @@ contract ghomultisig {
         }
     }
 
-    //New signatories require 100% of current signatories to be confirmed
-    function confirmSignatory(uint sigIndex) public onlySignatory {
-        require(sigIndex < signatories.length, "Not a valid signatory index");
-        NewSignatory storage addedSig = newSignatories[sigIndex];
-        require(!addedSig.confirmed, "Signatory addition has already been confirmed");
-        require(!addedSig.confirmations[msg.sender], "New Signatory already confirmed by this address");
 
-        addedSig.confirmations[msg.sender] = true;
-        addedSig.confirmationsCount += 1;
+    receive() external payable {
+        emit Deposit(msg.sender, msg.value, ghoToken.balanceOf(address(this)));
+    }
 
-        emit ConfirmSignatory(msg.sender, sigIndex);
 
-        if(addedSig.confirmationsCount == signatories.length){
-            addedSig.confirmed = true;
-            isSignatory[addedSig.sigAddress] = true;
-            signatories.push(addedSig.sigAddress);
-            requiredConfirmations += 1;
+    // Off-Chain Verification
+    function verifyTransaction(address _sender, uint _transactionIndex, bytes memory _sig) external onlySignatory returns (bool check) {
+        require(!(_sender == address(0)), "Invalid address");
+        bytes32 txHash = getTransactionHash(_transactionIndex);
+        bytes32 ethSignedTransactionHash = getEthSignedTransactionHash(txHash);
 
-            emit IncreaseMinimumConfirmations(msg.sender, requiredConfirmations);
-            emit AddSignatory(addedSig.sigAddress);
+        check = recover(ethSignedTransactionHash, _sig) == _sender;
+        if(check){
+            Transaction storage txAtInd = transactions[_transactionIndex];
+            txConfirmations[_transactionIndex][_sender] = true;
+            txAtInd.confirmationsCount += 1;
+
+            emit SignedTransaction(_sender, _transactionIndex);
+            if(txAtInd.confirmationsCount == requiredConfirmations){
+                executeTransaction(_transactionIndex);
+            }
         }
     }
 
-    // function increaseMinimumConfirmations(uint _increase) public onlySignatory {
-    //     require((requiredConfirmations + _increase) <= signatories.length, "Required Signatures exceeds total Signatories");
-    //     requiredConfirmations = requiredConfirmations + _increase;
+    function verifySignatory(address _sender, uint _signatoryIndex, bytes memory _sig) external onlySignatory returns (bool check) {
+        require(!(_sender == address(0)), "Invalid address");
+        bytes32 txHash = getSignatoryHash(_signatoryIndex);
+        bytes32 ethSignedTransactionHash = getEthSignedTransactionHash(txHash);
 
-    //     emit IncreaseMinimumConfirmations(msg.sender, requiredConfirmations);
-    // }
+        check = recover(ethSignedTransactionHash, _sig) == _sender;
+        if(check){
+            NewSignatory storage sigAtInd = newSignatories[_signatoryIndex];
+            sigConfirmations[_signatoryIndex][_sender] = true;
+            sigAtInd.confirmationsCount += 1;
+
+            emit ConfirmSignatory(_sender, _signatoryIndex);
+            if(sigAtInd.confirmationsCount == signatories.length){
+                sigAtInd.confirmed = true;
+                isSignatory[sigAtInd.sigAddress] = true;
+                signatories.push(sigAtInd.sigAddress);
+                requiredConfirmations += 1;
+
+                emit IncreaseMinimumConfirmations(_sender, requiredConfirmations);
+                emit AddSignatory(sigAtInd.sigAddress);
+            }
+        }
+    }
+
+
+
+    //Get the transaction hash for the staged transaction
+    function getTransactionHash(uint _transactionIndex) public view returns (bytes32){
+        require(_transactionIndex < transactions.length, "Transaction index out of bounds");
+        Transaction storage atIndex = transactions[_transactionIndex];
+        return keccak256(abi.encodePacked(atIndex.to, atIndex.amount, _transactionIndex));
+    } 
+
+    //Get the hash for staged signatory
+    function getSignatoryHash(uint _signatoryIndex) public view returns (bytes32){
+        require(_signatoryIndex < newSignatories.length, "Signatory index out of bounds");
+        NewSignatory storage atIndex = newSignatories[_signatoryIndex];
+        return keccak256(abi.encodePacked(atIndex.sigAddress));
+    }
+
+
+    //Get the EthSigned Transaction Hash for the staged tx
+    function getEthSignedTransactionHash(bytes32 _transactionHash) internal pure returns (bytes32){
+        return keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n32", _transactionHash));
+    }
+
+
+    //Recover the address of the of the signer
+    function recover(bytes32 _ethSignedMessageHash, bytes memory _sig) internal pure returns (address){
+        (bytes32 r, bytes32 s, uint8 v) = splitSignature(_sig);
+        return ecrecover(_ethSignedMessageHash, v, r, s);
+    }
+
+    //Split signature into necessary bytes
+    function splitSignature(bytes memory _sig) internal pure returns (bytes32 r, bytes32 s, uint8 v){
+        require(_sig.length == 65, "Invalid Signature Length");
+
+        assembly {
+            r := mload(add(_sig, 32))
+            s := mload(add(_sig, 64))
+            v := byte(0, mload(add(_sig, 96)))
+        }
+    }
+
+
+
 
     // Events
     event SubmitTransaction(address indexed owner, uint indexed txIndex, address indexed to, uint amount);
-    event ConfirmTransaction(address indexed owner, uint indexed txIndex);
     event ExecuteTransaction(address indexed owner, uint indexed txIndex);
     event NewSignatoryInQueue(address indexed owner, address indexed added, uint indexed signatoryIndex);
     event AddSignatory(address indexed added);
     event IncreaseMinimumConfirmations(address indexed owner, uint requiredConfirmations);
     event ConfirmSignatory(address indexed owner, uint indexed sigIndex);
+    event Deposit(address indexed sender, uint amount, uint balance);
+    event SignedTransaction(address indexed owner, uint indexed txIndex);
 }
