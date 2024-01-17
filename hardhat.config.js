@@ -10,7 +10,7 @@ const ALCHEMY_API_KEY = "hgFDEN5qNntUsCPBnTQiRzS8RPYvY5i6"; // Replace this with
 // To export your private key from Metamask, open Metamask and
 // go to Account Details > Export Private Key
 // Beware: NEVER put real Ether into testing accounts
-const SEPOLIA_PRIVATE_KEY = "<Private-Key>"; // Replace this with your Sepolia private key
+const SEPOLIA_PRIVATE_KEY = "<Private-Key>";
 
 module.exports = {
   solidity: "0.8.23",
