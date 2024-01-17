@@ -203,6 +203,22 @@ contract ghomultisig {
         }
     }
 
+    //Add function to allow a signatory to remove themselves from the wallet, and decrease required confirmations by 1
+    function removeSignatory() public onlySignatory {
+        require(signatories.length > 1, "Cannot remove last signatory");
+        isSignatory[msg.sender] = false;
+        for(uint i = 0; i < signatories.length; i++){
+            if(signatories[i] == msg.sender){
+                signatories[i] = signatories[signatories.length - 1];
+                signatories.pop();
+                break;
+            }
+        }
+        requiredConfirmations -= 1;
+        emit RemovedSignatory(msg.sender);
+        emit DecreaseMinimumConfirmations(msg.sender, requiredConfirmations);
+    }
+
 
 
 
@@ -215,4 +231,6 @@ contract ghomultisig {
     event ConfirmSignatory(address indexed owner, uint indexed sigIndex);
     event Deposit(address indexed sender, uint amount, uint balance);
     event SignedTransaction(address indexed owner, uint indexed txIndex);
+    event RemovedSignatory(address indexed removed);
+    event DecreaseMinimumConfirmations(address indexed owner, uint requiredConfirmations);
 }
