@@ -1,8 +1,8 @@
 {
   "_format": "hh-sol-cache-2",
   "files": {
-    "/mnt/c/Users/natec/OneDrive/Desktop/ETHGlobal/korthathon/contracts/ghomultisig.sol": {
-      "lastModificationDate": 1705460413492,
+    "/Users/david/Desktop/projects/korthathon/contracts/ghomultisig.sol": {
+      "lastModificationDate": 1705461379016,
       "contentHash": "a0331604d289c37520411eb0a4f0e920",
       "sourceName": "contracts/ghomultisig.sol",
       "solcConfig": {
@@ -39,8 +39,8 @@
         "ghomultisig"
       ]
     },
-    "/mnt/c/Users/natec/OneDrive/Desktop/ETHGlobal/korthathon/node_modules/@openzeppelin/contracts/token/ERC20/IERC20.sol": {
-      "lastModificationDate": 1705462274945,
+    "/Users/david/Desktop/projects/korthathon/node_modules/@openzeppelin/contracts/token/ERC20/IERC20.sol": {
+      "lastModificationDate": 1705463454712,
       "contentHash": "5517c8678c18eb1a8ba58810e7ca39ca",
       "sourceName": "@openzeppelin/contracts/token/ERC20/IERC20.sol",
       "solcConfig": {
