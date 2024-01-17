@@ -66,15 +66,28 @@ contract ghomultisig {
         _balance = ghoToken.balanceOf(address(this));
     }
 
+    function balanceETH() public view returns (uint256 _balance) {
+        _balance = address(this).balance;
+    }
+
+    // Submit a transaction to be executed by the wallet, and automatically sign off for confirmation as initiator
     function submitTransaction(address _to, uint256 _amount) public onlySignatory {
-        require(balanceGHO() >= _amount, "Insufficient amount of Tokens");
+        require(_to != address(0), "Invalid address");
+        require(_amount > 0, "Invalid amount");
+
         uint txIndex = transactions.length;
         transactions.push();
-        Transaction storage newTx = transactions[txIndex];
-        newTx.to = _to;
-        newTx.amount = _amount;
+        Transaction storage transaction = transactions[txIndex];
+        transaction.to = _to;
+        transaction.amount = _amount;
+        transaction.executed = false;
+        transaction.confirmationsCount = 1;
+        txConfirmations[txIndex][msg.sender] = true;
 
         emit SubmitTransaction(msg.sender, txIndex, _to, _amount);
+        if(transaction.confirmationsCount == requiredConfirmations){
+            executeTransaction(txIndex);
+        }
     }
 
     function executeTransaction(uint _txIndex) internal {
@@ -114,10 +127,6 @@ contract ghomultisig {
         }
     }
 
-
-    receive() external payable {
-        emit Deposit(msg.sender, msg.value, ghoToken.balanceOf(address(this)));
-    }
 
 
     // Off-Chain Verification
@@ -163,10 +172,30 @@ contract ghomultisig {
         }
     }
 
+    function revokeTransactionSignature(uint _transactionIndex) external onlySignatory {
+        require(_transactionIndex < transactions.length, "Transaction index out of bounds");
+        Transaction storage atIndex = transactions[_transactionIndex];
+        require(txConfirmations[_transactionIndex][msg.sender], "Transaction not signed by sender");
+        atIndex.confirmationsCount -= 1;
+        txConfirmations[_transactionIndex][msg.sender] = false;
+
+        emit RemovedSignatureFromTransaction(msg.sender, _transactionIndex);
+    }
+
+    function revokeSignatorySignature(uint _signatoryIndex) external onlySignatory {
+        require(_signatoryIndex < newSignatories.length, "Signatory index out of bounds");
+        NewSignatory storage atIndex = newSignatories[_signatoryIndex];
+        require(sigConfirmations[_signatoryIndex][msg.sender], "Signatory not signed by sender");
+        atIndex.confirmationsCount -= 1;
+        sigConfirmations[_signatoryIndex][msg.sender] = false;
+
+        emit RemovedSignatureFromSignatory(msg.sender, _signatoryIndex);
+    }
+
 
 
     //Get the transaction hash for the staged transaction
-    function getTransactionHash(uint _transactionIndex) public view returns (bytes32){
+    function getTransactionHash(uint _transactionIndex) public view onlySignatory returns (bytes32){
         require(_transactionIndex < transactions.length, "Transaction index out of bounds");
         Transaction storage atIndex = transactions[_transactionIndex];
         return keccak256(abi.encodePacked(atIndex.to, atIndex.amount, _transactionIndex));
@@ -221,16 +250,30 @@ contract ghomultisig {
             if(txConfirmations[i][msg.sender]){
                 transactions[i].confirmationsCount -= 1;
                 txConfirmations[i][msg.sender] = false;
+
+                emit RemovedSignatureFromTransaction(msg.sender, i);
             }
         }
         for(uint i = 0; i < newSignatories.length; i++){
             if(sigConfirmations[i][msg.sender]){
                 newSignatories[i].confirmationsCount -= 1;
                 sigConfirmations[i][msg.sender] = false;
+
+                emit RemovedSignatureFromSignatory(msg.sender, i);
             }
         }
     }
 
+    //Fucntion to emit an event when the contract receives GHO tokens
+    function depositGHO(uint _amount) public {
+        require(ghoToken.transferFrom(msg.sender, address(this), _amount), "Transfer failed");
+        emit Deposit(msg.sender, _amount, ghoToken.balanceOf(address(this)));
+    }
+
+    //Fucntion to emit an event when the contract receives ETH
+    function depositETH() public payable {
+        emit Deposit(msg.sender, msg.value, ghoToken.balanceOf(address(this)));
+    }
 
 
 
@@ -245,4 +288,6 @@ contract ghomultisig {
     event SignedTransaction(address indexed owner, uint indexed txIndex);
     event RemovedSignatory(address indexed removed);
     event DecreaseMinimumConfirmations(address indexed owner, uint requiredConfirmations);
+    event RemovedSignatureFromTransaction(address indexed owner, uint indexed txIndex);
+    event RemovedSignatureFromSignatory(address indexed owner, uint indexed sigIndex);
 }
