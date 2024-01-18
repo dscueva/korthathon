@@ -4,7 +4,7 @@ pragma solidity ^0.8.21;
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Permit.sol";
 
-// Nate PubKey ["0xc977Fdb84F4ed2425f6afA5f47bd686291615451"]
+// Nate PubKey ["0xc977Fdb84F4ed2425f6afA5f47bd686291615451", "0x5bEb07c71Da8ceD22A392847E775a245c4F431de"]
 contract ghomultisig {
     
     IERC20 ghoToken;
@@ -132,6 +132,7 @@ contract ghomultisig {
     // Off-Chain Verification
     function verifyTransaction(address _sender, uint _transactionIndex, bytes memory _sig) external onlySignatory returns (bool check) {
         require(!(_sender == address(0)), "Invalid address");
+        require(!(txConfirmations[_transactionIndex][_sender]), "Already signed with this address");
         bytes32 txHash = getTransactionHash(_transactionIndex);
         bytes32 ethSignedTransactionHash = getEthSignedTransactionHash(txHash);
 
@@ -150,6 +151,7 @@ contract ghomultisig {
 
     function verifySignatory(address _sender, uint _signatoryIndex, bytes memory _sig) external onlySignatory returns (bool check) {
         require(!(_sender == address(0)), "Invalid address");
+        require(!(sigConfirmations[_signatoryIndex][_sender]), "Already signed with this address");
         bytes32 txHash = getSignatoryHash(_signatoryIndex);
         bytes32 ethSignedTransactionHash = getEthSignedTransactionHash(txHash);
 
