@@ -6,28 +6,41 @@ async function getSigner() {
     return signer;
 }
 
-async function approveGhoTokens(signer, ghoTokenAddress, contractAddress, amountGho) {
+async function approveGhoTokens(signer, ghoTokenAddress, contractAddress, amountGhoInTokens) {
+    const amountGho = ethers.parseUnits(amountGhoInTokens.toString(), 18);
     const ghoTokenContract = await ethers.getContractAt("IERC20", ghoTokenAddress, signer);
-    console.log("Approving GHO tokens...");
-    let tx = await ghoTokenContract.approve(contractAddress, amountGho);
-    await tx.wait();
-    console.log("GHO tokens approved.");
+
+    try {
+        console.log("Approving GHO tokens...");
+        let tx = await ghoTokenContract.approve(contractAddress, amountGho);
+        await tx.wait();
+        console.log("GHO tokens approved.");
+    } catch (error) {
+        console.error("Failed to approve GHO tokens:", error);
+    }
 }
 
-async function depositGhoTokens(signer, contractAddress, amountGho) {
+async function depositGhoTokens(signer, contractAddress, amountGhoInTokens) {
+    const amountGho = ethers.parseUnits(amountGhoInTokens.toString(), 18);
     const multisigContract = await ethers.getContractAt("ghomultisig", contractAddress, signer);
-    console.log("Depositing GHO tokens to Multisig...");
-    let tx = await multisigContract.depositGHO(amountGho);
-    await tx.wait();
-    console.log("Deposited GHO tokens to Multisig.");
+
+    try {
+        console.log(`Depositing ${amountGhoInTokens} GHO tokens to Multisig...`);
+        let tx = await multisigContract.depositGHO(amountGho);
+        await tx.wait();
+        console.log(`Deposited ${amountGhoInTokens} GHO tokens to Multisig.`);
+    } catch (error) {
+        console.error("Failed to deposit GHO tokens:", error);
+    }
 }
 
-async function submitTransaction(signer, contractAddress, recipientAddress, amountGho) {
+async function submitTransaction(signer, contractAddress, recipientAddress, amountGhoInTokens) {
+    const amountGho = ethers.parseUnits(amountGhoInTokens.toString(), 18); // Converts token amount to wei
     const multisigContract = await ethers.getContractAt("ghomultisig", contractAddress, signer);
-    console.log("Submitting transaction...");
+    console.log(`Submitting transaction of ${amountGhoInTokens} GHO tokens...`);
     let tx = await multisigContract.submitTransaction(recipientAddress, amountGho);
     await tx.wait();
-    console.log("Transaction submitted.");
+    console.log(`Transaction of ${amountGhoInTokens} GHO tokens submitted.`);
 }
 
 async function verifyAndExecuteTransaction(signer, contractAddress, txIndex) {
@@ -46,6 +59,82 @@ async function getMultisigGhoBalance(signer, ghoTokenAddress, contractAddress) {
     console.log(`Multisig Contract GHO Token Balance: ${ethers.formatUnits(balance, 18)} GHO`);
     return balance;
 }
+async function viewStagedTransactions(signer, contractAddress) {
+    const multisigContract = await ethers.getContractAt("ghomultisig", contractAddress, signer);
+    const transactions = await multisigContract.viewStagedTransactions();
+    console.log("Staged Transactions: ", transactions);
+    return transactions;
+}
+
+async function viewStagedSignatories(signer, contractAddress) {
+    const multisigContract = await ethers.getContractAt("ghomultisig", contractAddress, signer);
+    const signatories = await multisigContract.viewStagedSignatories();
+    console.log("Staged Signatories: ", signatories);
+    return signatories;
+}
+
+async function balanceETH(signer, contractAddress) {
+    const multisigContract = await ethers.getContractAt("ghomultisig", contractAddress, signer);
+    const balance = await multisigContract.balanceETH();
+    console.log(`Multisig Contract ETH Balance: ${ethers.utils.formatEther(balance)} ETH`);
+    return balance;
+}
+
+async function addSignatory(signer, contractAddress, newSignatoryAddress) {
+    const multisigContract = await ethers.getContractAt("ghomultisig", contractAddress, signer);
+    console.log("Adding new signatory...");
+    let tx = await multisigContract.addSignatory(newSignatoryAddress);
+    await tx.wait();
+    console.log("New signatory added.");
+}
+
+async function revokeTransactionSignature(signer, contractAddress, txIndex) {
+    const multisigContract = await ethers.getContractAt("ghomultisig", contractAddress, signer);
+    console.log("Revoking signature for transaction...");
+    let tx = await multisigContract.revokeTransactionSignature(txIndex);
+    await tx.wait();
+    console.log("Signature revoked for transaction.");
+}
+
+async function revokeSignatorySignature(signer, contractAddress, sigIndex) {
+    const multisigContract = await ethers.getContractAt("ghomultisig", contractAddress, signer);
+    console.log("Revoking signature for signatory...");
+    let tx = await multisigContract.revokeSignatorySignature(sigIndex);
+    await tx.wait();
+    console.log("Signature revoked for signatory.");
+}
+
+async function removeSignatory(signer, contractAddress) {
+    const multisigContract = await ethers.getContractAt("ghomultisig", contractAddress, signer);
+    console.log("Removing self as signatory...");
+    let tx = await multisigContract.removeSignatory();
+    await tx.wait();
+    console.log("Removed self as signatory.");
+}
+
+async function getTransactionHash(signer, contractAddress, txIndex) {
+    const multisigContract = await ethers.getContractAt("ghomultisig", contractAddress, signer);
+    try {
+        const txHash = await multisigContract.getTransactionHash(txIndex);
+        console.log(`Transaction Hash for index ${txIndex}: ${txHash}`);
+        return txHash;
+    } catch (error) {
+        console.error(`Failed to get transaction hash for index ${txIndex}:`, error);
+    }
+}
+
+async function signTransaction(signer, contractAddress, txIndex) {
+    try {
+        const multisigContract = await ethers.getContractAt("ghomultisig", contractAddress, signer);
+        const txHash = await multisigContract.getTransactionHash(txIndex);
+
+        const signature = await signer.signMessage(txHash);
+
+        console.log(`Signed transaction at index ${txIndex}: ${signature}`);
+    } catch (error) {
+        console.error(`Failed to sign transaction at index ${txIndex}:`, error);
+    }
+}
 
 module.exports = {
     getSigner,
@@ -53,5 +142,14 @@ module.exports = {
     depositGhoTokens,
     submitTransaction,
     verifyAndExecuteTransaction,
-    getMultisigGhoBalance
+    getMultisigGhoBalance,
+    viewStagedTransactions,
+    viewStagedSignatories,
+    balanceETH,
+    addSignatory,
+    revokeTransactionSignature,
+    revokeSignatorySignature,
+    removeSignatory,
+    signTransaction,
+    getTransactionHash
 };
