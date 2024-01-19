@@ -1,24 +1,19 @@
-// interact.js
-const ContractFunc = require('./contract_functions.js');
+// main.js
 const { ethers } = require("hardhat");
+const ContractFunc = require('./contract_functions.js'); // Use require
 
 async function main() {
-    const contractAddress = "0xC3d2F35230364f1B8631543B892b29253F5C09B0";
-    const walletAddress = "";
-    const privateKey = ""; // Replace with your actual private key
-
-    // Create a wallet instance using the private key
-    const walletWithProvider = new ethers.Wallet(privateKey, ethers.provider);
+    const contractAddress = "0x1CBC9bccc786845651b89d198127CBa181E61314"; // Updated contract address
+    const walletAddress = "0xb9aaa8B7D238b4C28B77faA107F617F97Ca44e28"; // Your wallet address
+    const [signer] = await ethers.getSigners();
 
     const GhoMultisig = await ethers.getContractFactory("ghomultisig");
-    const ghoMultisig = await GhoMultisig.attach(contractAddress).connect(walletWithProvider);
+    const ghoMultisig = await GhoMultisig.attach(contractAddress);
 
-    // Call other functions or tasks if needed
+    // Call functions here
     await ContractFunc.balanceGHO(ghoMultisig, walletAddress);
     await ContractFunc.balanceETH(ghoMultisig, walletAddress);
-
-    // Call the modified submitTransaction function with walletWithProvider
-    await ContractFunc.submitTransaction(ghoMultisig, walletAddress, 1, walletWithProvider);
+   // await ContractFunc.depositGHO(ghoMultisig, walletAddress, 8000000000000000000);
 }
 
 main()
