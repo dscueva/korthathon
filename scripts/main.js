@@ -19,6 +19,22 @@ async function main() {
     await sdk.verifyAndExecuteTransaction(signer, contractAddress, txIndex);
 }
 
+
+// Create a menu with the following options:
+/*
+- Select contract address: this will allow the user to switch between active wallets
+- View Staged Transactions: this will allow the user to view all staged transactions
+- View Staged Signatories: this will allow the user to view all staged signatories
+- View Contract GHO balance
+- Deposit GHO tokens
+- Submit Transaction
+- Verify and Execute Transaction
+- Remove myself as signatory
+- Add signatory
+- Revoke signature for transaction
+- Revoke signature for signatory
+*/
+
 main()
     .then(() => process.exit(0))
     .catch((error) => {

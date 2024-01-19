@@ -11,7 +11,7 @@ async function main() {
   // Deploy the contract
   const GhoMultisig = await ethers.getContractFactory("ghomultisig");
   const ghoMultisig = await GhoMultisig.deploy(initialSignatories, requiredConfirmations);
-
+  
   console.log("GhoMultisig deployed to:", ghoMultisig.target);
 }
 
