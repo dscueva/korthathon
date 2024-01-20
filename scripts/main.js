@@ -16,7 +16,7 @@ async function main() {
 
     // Assuming you want the last transaction
     const txIndex = 0; // Replace with actual index if needed
-    await sdk.verifyAndExecuteTransaction(signer, contractAddress, txIndex);
+    // await sdk.verifyAndExecuteTransaction(signer, contractAddress, txIndex);
 }
 
 

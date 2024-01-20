@@ -1,0 +1,30 @@
+{
+    "name": "your-frontend-project",
+    "version": "1.0.0",
+    "description": "Your frontend project description",
+    "main": "index.js",
+    "scripts": {
+      "start": "react-scripts start"
+    },
+    "devDependencies": {
+      "react-scripts": "^5.0.1"
+    },
+    "browserslist": {
+      "production": [
+        ">0.2%",
+        "not dead",
+        "not op_mini all"
+      ],
+      "development": [
+        "last 1 chrome version",
+        "last 1 firefox version",
+        "last 1 safari version"
+      ]
+    },
+    "dependencies": {
+        "react-dom": "^18.2.0",
+        "@babel/plugin-proposal-private-property-in-object": "^7.14.5"
+      }
+      
+  }
+  
