@@ -2,36 +2,55 @@
 pragma solidity ^0.8.21;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Permit.sol";
 
-// Nate PubKey ["0xc977Fdb84F4ed2425f6afA5f47bd686291615451", "0x5bEb07c71Da8ceD22A392847E775a245c4F431de"]
+
 contract ghomultisig {
     
     IERC20 ghoToken;
     address[] public signatories;
     mapping(address => bool) isSignatory;
     uint public requiredConfirmations;
-
+    uint public requiredRejections;
+    uint nonce = 0;
     
-
     struct Transaction {
         address to;
+        uint nonce;
+        bytes32 txHash;
         uint256 amount;
-        bool executed;
         uint confirmationsCount;
+        uint rejectCount;
     }
 
     struct NewSignatory {
         address sigAddress;
-        bool confirmed;
+        uint nonce;
+        bytes32 sigHash;
+        uint confirmationsCount;
+    }
+
+    struct WalletChange {
+        uint newRequiredConfirmations;
+        uint nonce;
+        bytes32 walletChangeHash;
         uint confirmationsCount;
     }
 
     Transaction[] internal transactions;
-    mapping(uint => mapping(address => bool)) txConfirmations;
+    mapping(bytes32 => mapping(address => bool)) txConfirmations;
+    mapping(bytes32 => mapping(address => bool)) txRejections;
+    mapping(bytes32 => uint) txIndices;
+    mapping(bytes32 => Transaction) txs;
     
     NewSignatory[] internal newSignatories;
-    mapping(uint => mapping(address => bool)) sigConfirmations;
+    mapping(bytes32 => mapping(address => bool)) sigConfirmations;
+    mapping(bytes32 => uint) sigIndices;
+    mapping(bytes32 => NewSignatory) sigs;
+
+    WalletChange[] internal walletChanges;
+    mapping(bytes32 => mapping(address => bool)) walletChangeConfirmations;
+    mapping(bytes32 => uint) walletChangeIndices;
+    mapping(bytes32 => WalletChange) wcs;
 
 
     modifier onlySignatory() {
@@ -52,6 +71,7 @@ contract ghomultisig {
             signatories.push(signatory);
         }
         requiredConfirmations = _requiredConfirmations;
+        requiredRejections = 1 + (_signatories.length - _requiredConfirmations);
     }
 
     function viewStagedTransactions() external view onlySignatory returns(Transaction[] memory){
@@ -70,37 +90,52 @@ contract ghomultisig {
         _balance = address(this).balance;
     }
 
-    // Submit a transaction to be executed by the wallet, and automatically sign off for confirmation as initiator
-    function submitTransaction(address _to, uint256 _amount) public onlySignatory {
-        require(_to != address(0), "Invalid address");
+    // Submit a transaction to be executed by the wallet, and automatically sign off for confirmation as initiator. If the required confirmations is 1, the transaction is executed immediately and never added to the array.
+    function submitTransaction(address _recipient, uint256 _amount) public onlySignatory {
+        require(_recipient != address(0), "Invalid address");
         require(_amount > 0, "Invalid amount");
+
+        //If there is only one required confirmation, automatically execute the transaction
+        if(requiredConfirmations == 1){
+            require(balanceGHO() >= _amount, "Insufficient amount of tokens in wallet");
+            require(ghoToken.transfer(_recipient, _amount), "Transfer failed");
+            emit ExecuteSoleTransaction(msg.sender, _recipient, _amount);
+            return;
+        }
 
         uint txIndex = transactions.length;
         transactions.push();
         Transaction storage transaction = transactions[txIndex];
-        transaction.to = _to;
+        transaction.to = _recipient;
         transaction.amount = _amount;
-        transaction.executed = false;
+        transaction.nonce = nonce;
+        nonce += 1;
         transaction.confirmationsCount = 1;
-        txConfirmations[txIndex][msg.sender] = true;
+        transaction.rejectCount = 0;
+        transaction.txHash = keccak256(abi.encodePacked(_recipient, _amount, nonce));
+        txConfirmations[transaction.txHash][msg.sender] = true;
+        txIndices[transaction.txHash] = txIndex;
+        txs[transaction.txHash] = transaction;
 
-        emit SubmitTransaction(msg.sender, txIndex, _to, _amount);
-        if(transaction.confirmationsCount == requiredConfirmations){
-            executeTransaction(txIndex);
-        }
+        emit SubmitTransaction(msg.sender, transaction.txHash, _recipient, _amount);
     }
 
-    function executeTransaction(uint _txIndex) internal {
-        require(_txIndex < transactions.length);
-        Transaction storage transaction = transactions[_txIndex];
+
+    function executeTransaction(bytes32 _txHash) internal {
+        Transaction storage transaction = transactions[txIndices[_txHash]];
+        require(_txHash == transaction.txHash, "Invalid transaction hash");
         require(balanceGHO() >= transaction.amount, "Insufficient amount of tokens in wallet");
-        require(!transaction.executed, "Transaction already executed");
-        require(transaction.confirmationsCount >= requiredConfirmations, "Insufficient confirmations");
 
         require(ghoToken.transfer(transaction.to, transaction.amount), "Transfer failed");
-        transaction.executed = true;
+        //Once transaction is executed, SAFELY remove it from the array
+        if(txIndices[_txHash] != transactions.length - 1){
+            uint txIndex = txIndices[_txHash];
+            transactions[txIndex] = transactions[transactions.length - 1];
+            txIndices[transactions[txIndex].txHash] = txIndex;
+        }
+        transactions.pop();
 
-        emit ExecuteTransaction(msg.sender, _txIndex);
+        emit ExecuteTransaction(msg.sender, _txHash);
     }
 
     // Add a new signatory to be a member of the wallet, and automatically sign off for confirmation as initiator
@@ -119,51 +154,57 @@ contract ghomultisig {
             newSignatories.push();
             NewSignatory storage newSig = newSignatories[sigIndex];
             newSig.sigAddress = _addedSignatory;
-            sigConfirmations[sigIndex][msg.sender] = true;
+            newSig.nonce = nonce;
+            nonce += 1;
+            newSig.sigHash = keccak256(abi.encodePacked(_addedSignatory, nonce));
+            sigConfirmations[newSig.sigHash][msg.sender] = true;
+            sigIndices[newSig.sigHash] = sigIndex;
             newSig.confirmationsCount = 1;
-            newSig.confirmed = false;
 
-            emit NewSignatoryInQueue(msg.sender, _addedSignatory, sigIndex);
+            emit NewSignatoryInQueue(msg.sender, _addedSignatory, newSig.sigHash);
         }
     }
 
 
 
     // Off-Chain Verification
-    function verifyTransaction(address _sender, uint _transactionIndex, bytes memory _sig) external onlySignatory returns (bool check) {
+    function verifyTransaction(bytes32 _txHash, bytes memory _sig) external onlySignatory returns (bool check) {
+        address _sender = msg.sender;
+        require(!(_txHash == bytes32(0)), "Invalid transaction hash");
         require(!(_sender == address(0)), "Invalid address");
-        require(!(txConfirmations[_transactionIndex][_sender]), "Already signed with this address");
-        bytes32 txHash = getTransactionHash(_transactionIndex);
-        bytes32 ethSignedTransactionHash = getEthSignedTransactionHash(txHash);
+        require(!(txConfirmations[_txHash][_sender]), "Already signed with this address");
+        require(_txHash == transactions[txIndices[_txHash]].txHash, "Invalid transaction hash");
+        bytes32 ethSignedTransactionHash = getEthSignedTransactionHash(_txHash);
 
         check = recover(ethSignedTransactionHash, _sig) == _sender;
         if(check){
-            Transaction storage txAtInd = transactions[_transactionIndex];
-            txConfirmations[_transactionIndex][_sender] = true;
+            Transaction storage txAtInd = transactions[txIndices[_txHash]];
+            txConfirmations[_txHash][_sender] = true;
             txAtInd.confirmationsCount += 1;
 
-            emit SignedTransaction(_sender, _transactionIndex);
+            emit SignedTransaction(_sender, _txHash);
             if(txAtInd.confirmationsCount == requiredConfirmations){
-                executeTransaction(_transactionIndex);
+                executeTransaction(_txHash);
             }
         }
     }
 
-    function verifySignatory(address _sender, uint _signatoryIndex, bytes memory _sig) external onlySignatory returns (bool check) {
+    function verifySignatory(bytes32 _sigHash, bytes memory _sig) external onlySignatory returns (bool check) {
+        address _sender = msg.sender;
+        require(!(_sigHash == bytes32(0)), "Invalid signatory hash");
         require(!(_sender == address(0)), "Invalid address");
-        require(!(sigConfirmations[_signatoryIndex][_sender]), "Already signed with this address");
-        bytes32 txHash = getSignatoryHash(_signatoryIndex);
-        bytes32 ethSignedTransactionHash = getEthSignedTransactionHash(txHash);
+        require(!(sigConfirmations[_sigHash][_sender]), "Already signed with this address");
+        require(_sigHash == newSignatories[sigIndices[_sigHash]].sigHash, "Invalid signatory hash");
+        bytes32 ethSignedTransactionHash = getEthSignedTransactionHash(_sigHash);
 
         check = recover(ethSignedTransactionHash, _sig) == _sender;
         if(check){
-            NewSignatory storage sigAtInd = newSignatories[_signatoryIndex];
-            sigConfirmations[_signatoryIndex][_sender] = true;
+            NewSignatory storage sigAtInd = newSignatories[sigIndices[_sigHash]];
+            sigConfirmations[_sigHash][_sender] = true;
             sigAtInd.confirmationsCount += 1;
 
-            emit ConfirmSignatory(_sender, _signatoryIndex);
+            emit ConfirmSignatory(_sender, _sigHash);
             if(sigAtInd.confirmationsCount == signatories.length){
-                sigAtInd.confirmed = true;
                 isSignatory[sigAtInd.sigAddress] = true;
                 signatories.push(sigAtInd.sigAddress);
                 requiredConfirmations += 1;
@@ -174,25 +215,140 @@ contract ghomultisig {
         }
     }
 
-    function revokeTransactionSignature(uint _transactionIndex) external onlySignatory {
-        require(_transactionIndex < transactions.length, "Transaction index out of bounds");
-        Transaction storage atIndex = transactions[_transactionIndex];
-        require(txConfirmations[_transactionIndex][msg.sender], "Transaction not signed by sender");
+    function revokeTransactionSignature(bytes32 _txHash) external onlySignatory {
+        require(txIndices[_txHash] < transactions.length, "Transaction index out of bounds");
+        Transaction storage atIndex = transactions[txIndices[_txHash]];
+        require(txConfirmations[_txHash][msg.sender], "Transaction not signed by sender");
         atIndex.confirmationsCount -= 1;
-        txConfirmations[_transactionIndex][msg.sender] = false;
+        txConfirmations[_txHash][msg.sender] = false;
 
-        emit RemovedSignatureFromTransaction(msg.sender, _transactionIndex);
+        emit RemovedSignatureFromTransaction(msg.sender, _txHash);
     }
 
-    function revokeSignatorySignature(uint _signatoryIndex) external onlySignatory {
-        require(_signatoryIndex < newSignatories.length, "Signatory index out of bounds");
-        NewSignatory storage atIndex = newSignatories[_signatoryIndex];
-        require(sigConfirmations[_signatoryIndex][msg.sender], "Signatory not signed by sender");
-        atIndex.confirmationsCount -= 1;
-        sigConfirmations[_signatoryIndex][msg.sender] = false;
+    function revokeTransactionRejection(bytes32 _txHash) external onlySignatory {
+        require(txIndices[_txHash] < transactions.length, "Transaction index out of bounds");
+        Transaction storage atIndex = transactions[txIndices[_txHash]];
+        require(txRejections[_txHash][msg.sender], "Transaction not rejected by sender");
+        atIndex.rejectCount -= 1;
+        txRejections[_txHash][msg.sender] = false;
 
-        emit RemovedSignatureFromSignatory(msg.sender, _signatoryIndex);
+        emit RemovedRejectionFromTransaction(msg.sender, _txHash);
     }
+
+    function revokeSignatorySignature(bytes32 _sigHash) external onlySignatory {
+        require(sigIndices[_sigHash] < newSignatories.length, "Signatory index out of bounds");
+        NewSignatory storage atIndex = newSignatories[sigIndices[_sigHash]];
+        require(sigConfirmations[_sigHash][msg.sender], "Signatory not signed by sender");
+        atIndex.confirmationsCount -= 1;
+        sigConfirmations[_sigHash][msg.sender] = false;
+
+        emit RemovedSignatureFromSignatory(msg.sender, _sigHash);
+    }
+
+    function verifyWalletChange(bytes32 _walletChangeHash, bytes memory _sig) external onlySignatory returns (bool check) {
+        address _sender = msg.sender;
+        require(!(_walletChangeHash == bytes32(0)), "Invalid wallet change hash");
+        require(!(_sender == address(0)), "Invalid address");
+        require(!(walletChangeConfirmations[_walletChangeHash][_sender]), "Already signed with this address");
+        require(_walletChangeHash == walletChanges[walletChangeIndices[_walletChangeHash]].walletChangeHash, "Invalid wallet change hash");
+        bytes32 ethSignedTransactionHash = getEthSignedTransactionHash(_walletChangeHash);
+
+        check = recover(ethSignedTransactionHash, _sig) == _sender;
+        if(check){
+            WalletChange storage wcAtInd = walletChanges[walletChangeIndices[_walletChangeHash]];
+            walletChangeConfirmations[_walletChangeHash][_sender] = true;
+            wcAtInd.confirmationsCount += 1;
+
+            emit ConfirmWalletChange(_sender, _walletChangeHash);
+            if(wcAtInd.confirmationsCount == signatories.length){
+                bool emission = (requiredConfirmations < wcAtInd.newRequiredConfirmations);
+                requiredConfirmations = wcAtInd.newRequiredConfirmations;
+                if(emission){
+                    emit IncreaseMinimumConfirmations(_sender, requiredConfirmations);
+                }else{
+                    emit DecreaseMinimumConfirmations(_sender, requiredConfirmations);
+                }
+            }
+        }
+    }
+
+    function revokeWalletChangeSignature(bytes32 _walletChangeHash) external onlySignatory {
+        require(walletChangeIndices[_walletChangeHash] < walletChanges.length, "Wallet change index out of bounds");
+        WalletChange storage atIndex = walletChanges[walletChangeIndices[_walletChangeHash]];
+        require(walletChangeConfirmations[_walletChangeHash][msg.sender], "Wallet change not signed by sender");
+        atIndex.confirmationsCount -= 1;
+        walletChangeConfirmations[_walletChangeHash][msg.sender] = false;
+
+        emit RemovedSignatureFromWalletChange(msg.sender, _walletChangeHash);
+    }
+
+    //Reject a transaction using its hash, and if the required rejections is met, SAFELY remove the transaction from the array.
+    function rejectTransaction(bytes32 _txHash) external onlySignatory {
+        address _sender = msg.sender;
+        require(!(_txHash == bytes32(0)), "Invalid transaction hash");
+        require(!(_sender == address(0)), "Invalid address");
+        require(!(txRejections[_txHash][_sender]), "Already rejected with this address");
+        require(_txHash == transactions[txIndices[_txHash]].txHash, "Invalid transaction hash");
+
+        txConfirmations[_txHash][_sender] = false; //Remove signature if it exists
+
+        Transaction storage txAtInd = transactions[txIndices[_txHash]];
+        txRejections[_txHash][_sender] = true;
+        txAtInd.rejectCount += 1;
+
+        emit RejectedTransaction(_sender, _txHash);
+        if(txAtInd.rejectCount == requiredRejections){
+            if(txIndices[_txHash] != transactions.length - 1){
+                uint _transactionIndex = txIndices[_txHash];
+                transactions[_transactionIndex] = transactions[transactions.length - 1];
+                txIndices[transactions[_transactionIndex].txHash] = _transactionIndex;
+            }
+            transactions.pop();
+
+            emit RemovedTransaction(_sender, _txHash);
+        }
+
+    }
+
+    //Reject a signatory using its hash, and safely remove it from the array since it only requires 1 rejection.
+    function rejectSignatory(bytes32 _sigHash) external onlySignatory {
+        address _sender = msg.sender;
+        require(!(_sigHash == bytes32(0)), "Invalid signatory hash");
+        require(!(_sender == address(0)), "Invalid address");
+        require(_sigHash == newSignatories[sigIndices[_sigHash]].sigHash, "Invalid signatory hash");
+
+        sigConfirmations[_sigHash][_sender] = false; //Remove signature if it exists
+        if(sigIndices[_sigHash] != newSignatories.length - 1){
+            uint sigIndex = sigIndices[_sigHash];
+            newSignatories[sigIndices[_sigHash]] = newSignatories[newSignatories.length - 1];
+            sigIndices[newSignatories[sigIndices[_sigHash]].sigHash] = sigIndex;
+        }
+        newSignatories.pop();
+
+        emit RemovedProposedSignatory(_sender, _sigHash);
+    }
+
+    //Reject a wallet change using its hash, and safely remove it from the array since it only requires 1 rejection.
+    function rejectWalletChange(bytes32 _walletChangeHash) external onlySignatory {
+        address _sender = msg.sender;
+        require(!(_walletChangeHash == bytes32(0)), "Invalid wallet change hash");
+        require(!(_sender == address(0)), "Invalid address");
+        require(_walletChangeHash == walletChanges[walletChangeIndices[_walletChangeHash]].walletChangeHash, "Invalid wallet change hash");
+
+        walletChangeConfirmations[_walletChangeHash][_sender] = false; //Remove signature if it exists
+        if(walletChangeIndices[_walletChangeHash] != walletChanges.length - 1){
+            uint wcindex = walletChangeIndices[_walletChangeHash];
+            walletChanges[walletChangeIndices[_walletChangeHash]] = walletChanges[walletChanges.length - 1];
+            walletChangeIndices[walletChanges[walletChangeIndices[_walletChangeHash]].walletChangeHash] = wcindex;
+        }
+        walletChanges.pop();
+
+        emit RemovedProposedWalletChange(_sender, _walletChangeHash);
+    }
+
+
+
+
 
 
 
@@ -200,14 +356,21 @@ contract ghomultisig {
     function getTransactionHash(uint _transactionIndex) public view onlySignatory returns (bytes32){
         require(_transactionIndex < transactions.length, "Transaction index out of bounds");
         Transaction storage atIndex = transactions[_transactionIndex];
-        return keccak256(abi.encodePacked(atIndex.to, atIndex.amount, _transactionIndex));
+        return atIndex.txHash;
     } 
 
     //Get the hash for staged signatory
     function getSignatoryHash(uint _signatoryIndex) public view returns (bytes32){
         require(_signatoryIndex < newSignatories.length, "Signatory index out of bounds");
         NewSignatory storage atIndex = newSignatories[_signatoryIndex];
-        return keccak256(abi.encodePacked(atIndex.sigAddress));
+        return atIndex.sigHash;
+    }
+
+    //Get the hash for staged wallet change
+    function getWalletChangeHash(uint _walletChangeIndex) public view returns (bytes32){
+        require(_walletChangeIndex < walletChanges.length, "Wallet change index out of bounds");
+        WalletChange storage atIndex = walletChanges[_walletChangeIndex];
+        return atIndex.walletChangeHash;
     }
 
 
@@ -249,21 +412,25 @@ contract ghomultisig {
         emit DecreaseMinimumConfirmations(msg.sender, requiredConfirmations);
         emit RemovedSignatory(msg.sender);
         for(uint i = 0; i < transactions.length; i++){
-            if(txConfirmations[i][msg.sender]){
-                transactions[i].confirmationsCount -= 1;
-                txConfirmations[i][msg.sender] = false;
 
-                emit RemovedSignatureFromTransaction(msg.sender, i);
+            if(txConfirmations[transactions[i].txHash][msg.sender]){
+                transactions[i].confirmationsCount -= 1;
+                txConfirmations[transactions[i].txHash][msg.sender] = false;
+
+                emit RemovedSignatureFromTransaction(msg.sender, transactions[i].txHash);
             }
         }
         for(uint i = 0; i < newSignatories.length; i++){
-            if(sigConfirmations[i][msg.sender]){
+            if(sigConfirmations[newSignatories[i].sigHash][msg.sender]){
                 newSignatories[i].confirmationsCount -= 1;
-                sigConfirmations[i][msg.sender] = false;
+                sigConfirmations[newSignatories[i].sigHash][msg.sender] = false;
 
-                emit RemovedSignatureFromSignatory(msg.sender, i);
+                emit RemovedSignatureFromSignatory(msg.sender, newSignatories[i].sigHash);
             }
         }
+        //Remove Wallet Change signatures
+        
+        //Remove transaction rejections
     }
 
     //Fucntion to emit an event when the contract receives GHO tokens
@@ -277,19 +444,48 @@ contract ghomultisig {
         emit Deposit(msg.sender, msg.value, ghoToken.balanceOf(address(this)));
     }
 
+    //Function that allows an owner to change the minimum required confirmations, but requires 100% of the owners to agree. Adds a wallet change to the walletChange array, and automatically signs off for confirmation as initiator.
+    function changeRequiredConfirmations(uint _newRequiredConfirmations) public onlySignatory {
+        require(_newRequiredConfirmations > 0, "Must have at least 1 required confirmation");
+        require(_newRequiredConfirmations <= signatories.length, "Cannot have more required confirmations than signatories");
+        uint walletChangeIndex = walletChanges.length;
+        walletChanges.push();
+        WalletChange storage walletChange = walletChanges[walletChangeIndex];
+        walletChange.newRequiredConfirmations = _newRequiredConfirmations;
+        walletChange.nonce = nonce;
+        nonce += 1;
+        walletChange.walletChangeHash = keccak256(abi.encodePacked(_newRequiredConfirmations, nonce));
+        walletChangeConfirmations[walletChange.walletChangeHash][msg.sender] = true;
+        walletChange.confirmationsCount = 1;
+
+        emit SubmitWalletChange(msg.sender, walletChange.walletChangeHash, _newRequiredConfirmations);
+    }
+
+    //Function that allows an owner to confirm a wallet change, but requires 100% of the owners to agree. If confirmed, the required confirmations is changed to the new value.
+
 
 
     // Events
-    event SubmitTransaction(address indexed owner, uint indexed txIndex, address indexed to, uint amount);
-    event ExecuteTransaction(address indexed owner, uint indexed txIndex);
-    event NewSignatoryInQueue(address indexed owner, address indexed added, uint indexed signatoryIndex);
+    event SubmitTransaction(address indexed owner, bytes32 indexed transactionHash, address indexed to, uint amount);
+    event ExecuteTransaction(address indexed owner, bytes32 indexed transactionHash);
+    event ExecuteSoleTransaction(address indexed owner, address indexed recipient, uint indexed amount);
+    event NewSignatoryInQueue(address indexed owner, address indexed added, bytes32 indexed sigHash);
     event AddSignatory(address indexed added);
     event IncreaseMinimumConfirmations(address indexed owner, uint requiredConfirmations);
-    event ConfirmSignatory(address indexed owner, uint indexed sigIndex);
+    event ConfirmSignatory(address indexed owner, bytes32 indexed sigHash);
     event Deposit(address indexed sender, uint amount, uint balance);
-    event SignedTransaction(address indexed owner, uint indexed txIndex);
+    event SignedTransaction(address indexed owner, bytes32 indexed transactionHash);
     event RemovedSignatory(address indexed removed);
     event DecreaseMinimumConfirmations(address indexed owner, uint requiredConfirmations);
-    event RemovedSignatureFromTransaction(address indexed owner, uint indexed txIndex);
-    event RemovedSignatureFromSignatory(address indexed owner, uint indexed sigIndex);
+    event RemovedSignatureFromTransaction(address indexed owner, bytes32 indexed transactionHash);
+    event RemovedSignatureFromSignatory(address indexed owner, bytes32 indexed sigHash);
+    event SubmitWalletChange(address indexed owner, bytes32 indexed walletChangeHash, uint indexed newRequiredConfirmations);
+    event ConfirmWalletChange(address indexed owner, bytes32 indexed walletChangeHash);
+    event RemovedSignatureFromWalletChange(address indexed owner, bytes32 indexed walletChangeHash);
+    event RejectedTransaction(address indexed owner, bytes32 indexed transactionHash);
+    event RemovedTransaction(address indexed owner, bytes32 indexed transactionHash);
+    event RemovedRejectionFromTransaction(address indexed owner, bytes32 indexed transactionHash);
+    event RemovedProposedSignatory(address indexed owner, bytes32 indexed sigHash);
+    event RemovedProposedWalletChange(address indexed owner, bytes32 indexed walletChangeHash);
+
 }
