@@ -4,20 +4,25 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "cd frontend && npm start"
+    "start": "concurrently \"npm run start-frontend\" \"npm run deploy-sdk && npm run start-backend\"",
+    "start-frontend": "cd frontend && npm start",
+    "deploy-sdk": "npx hardhat run scripts/ghoMultiSigSDK.js --network sepolia",
+    "start-backend": "npx hardhat node"
   },
   "author": "",
   "license": "ISC",
   "devDependencies": {
     "@nomicfoundation/hardhat-toolbox": "^4.0.0",
+    "concurrently": "^8.2.2",
     "ethers": "^6.10.0",
     "hardhat": "^2.19.4"
   },
   "dependencies": {
     "@openzeppelin/contracts": "^5.0.1",
     "alchemy-sdk": "^3.1.1",
+    "cors": "^2.8.5",
     "dotenv": "^16.3.1",
+    "express": "^4.18.2",
     "readline-sync": "^1.4.10"
   }
 }

@@ -1,6 +1,42 @@
 // ghoMultisigSDK.js
-const { ethers } = require("hardhat");
+// backend/server.js
+const express = require('express');
+const { ethers } = require('hardhat');
+const cors = require('cors');
 
+
+const app = express();
+const port = process.env.PORT || 3001;
+
+// Middleware to parse JSON requests
+app.use(express.json());
+
+// Enable CORS
+app.use(cors());
+
+// Example API route for approving GHO tokens
+app.post('/scripts/approveGhoTokens', async (req, res) => {
+  try {
+    const { ghoTokenAddress, contractAddress, amountGhoInTokens } = req.body;
+    const [signer] = await ethers.getSigners();
+
+
+    // Call your approveGhoTokens function
+    await approveGhoTokens(signer, ghoTokenAddress, contractAddress, amountGhoInTokens);
+
+    res.status(200).json({ message: 'GHO tokens approved successfully' });
+  } catch (error) {
+    console.error('Error approving GHO tokens:', error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+// Other API routes for additional functions
+
+// Start the Express server
+app.listen(port, () => {
+  console.log(`Server is running on port ${port}`);
+});
 async function getSigner() {
     const [signer] = await ethers.getSigners();
     return signer;
