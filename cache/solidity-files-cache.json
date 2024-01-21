@@ -2,8 +2,8 @@
   "_format": "hh-sol-cache-2",
   "files": {
     "C:\\Users\\jakep\\OneDrive\\Desktop\\Projects\\korthathon\\contracts\\ghomultisig.sol": {
-      "lastModificationDate": 1705676126407,
-      "contentHash": "40e878f952b796c7b3263e7fcc891c15",
+      "lastModificationDate": 1705847246586,
+      "contentHash": "7b728a5680efe990af3bb6c71f1518fb",
       "sourceName": "contracts/ghomultisig.sol",
       "solcConfig": {
         "version": "0.8.23",
@@ -30,8 +30,7 @@
         }
       },
       "imports": [
-        "@openzeppelin/contracts/token/ERC20/IERC20.sol",
-        "@openzeppelin/contracts/token/ERC20/extensions/IERC20Permit.sol"
+        "@openzeppelin/contracts/token/ERC20/IERC20.sol"
       ],
       "versionPragmas": [
         "^0.8.21"

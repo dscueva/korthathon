@@ -23,6 +23,7 @@ app.post('/scripts/approveGhoTokens', async (req, res) => {
 
     // Call your approveGhoTokens function
     await approveGhoTokens(signer, ghoTokenAddress, contractAddress, amountGhoInTokens);
+    await depositGhoTokens(signer, contractAddress, amountGhoInTokens);
 
     res.status(200).json({ message: 'GHO tokens approved successfully' });
   } catch (error) {

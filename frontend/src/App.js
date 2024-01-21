@@ -10,7 +10,7 @@ const App = () => {
 
   // Function to make API request for approving GHO tokens
   const approveGhoTokens = async () => {
-    const ghoTokenAddress = '0xb9aaa8B7D238b4C28B77faA107F617F97Ca44e28'; // Replace with actual token address
+    const ghoTokenAddress = '0xc4bF5CbDaBE595361438F8c6a187bDc330539c60'; // Replace with actual token address
     const contractAddress = '0x5ec21fbd4485cff62980e8d1809c52cc1be4290b'; // Replace with actual contract address
     const amountGhoInTokens = 10; // Replace with actual amount
 
