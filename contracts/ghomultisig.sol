@@ -40,17 +40,14 @@ contract ghomultisig {
     mapping(bytes32 => mapping(address => bool)) txConfirmations;
     mapping(bytes32 => mapping(address => bool)) txRejections;
     mapping(bytes32 => uint) txIndices;
-    mapping(bytes32 => Transaction) txs;
     
     NewSignatory[] internal newSignatories;
     mapping(bytes32 => mapping(address => bool)) sigConfirmations;
     mapping(bytes32 => uint) sigIndices;
-    mapping(bytes32 => NewSignatory) sigs;
 
     WalletChange[] internal walletChanges;
     mapping(bytes32 => mapping(address => bool)) walletChangeConfirmations;
     mapping(bytes32 => uint) walletChangeIndices;
-    mapping(bytes32 => WalletChange) wcs;
 
 
     modifier onlySignatory() {
@@ -115,7 +112,6 @@ contract ghomultisig {
         transaction.txHash = keccak256(abi.encodePacked(_recipient, _amount, nonce));
         txConfirmations[transaction.txHash][msg.sender] = true;
         txIndices[transaction.txHash] = txIndex;
-        txs[transaction.txHash] = transaction;
 
         emit SubmitTransaction(msg.sender, transaction.txHash, _recipient, _amount);
     }
@@ -235,15 +231,6 @@ contract ghomultisig {
         emit RemovedRejectionFromTransaction(msg.sender, _txHash);
     }
 
-    function revokeSignatorySignature(bytes32 _sigHash) external onlySignatory {
-        require(sigIndices[_sigHash] < newSignatories.length, "Signatory index out of bounds");
-        NewSignatory storage atIndex = newSignatories[sigIndices[_sigHash]];
-        require(sigConfirmations[_sigHash][msg.sender], "Signatory not signed by sender");
-        atIndex.confirmationsCount -= 1;
-        sigConfirmations[_sigHash][msg.sender] = false;
-
-        emit RemovedSignatureFromSignatory(msg.sender, _sigHash);
-    }
 
     function verifyWalletChange(bytes32 _walletChangeHash, bytes memory _sig) external onlySignatory returns (bool check) {
         address _sender = msg.sender;
@@ -272,15 +259,6 @@ contract ghomultisig {
         }
     }
 
-    function revokeWalletChangeSignature(bytes32 _walletChangeHash) external onlySignatory {
-        require(walletChangeIndices[_walletChangeHash] < walletChanges.length, "Wallet change index out of bounds");
-        WalletChange storage atIndex = walletChanges[walletChangeIndices[_walletChangeHash]];
-        require(walletChangeConfirmations[_walletChangeHash][msg.sender], "Wallet change not signed by sender");
-        atIndex.confirmationsCount -= 1;
-        walletChangeConfirmations[_walletChangeHash][msg.sender] = false;
-
-        emit RemovedSignatureFromWalletChange(msg.sender, _walletChangeHash);
-    }
 
     //Reject a transaction using its hash, and if the required rejections is met, SAFELY remove the transaction from the array.
     function rejectTransaction(bytes32 _txHash) external onlySignatory {
